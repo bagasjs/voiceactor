@@ -55,25 +55,23 @@ let wsconn = null;
                 {
                     addNewLog(LOG_INFO, "Server is responding to our PONG")
                 } break;
-            case "AUDIOSTREAMINGSERVICE_RECEIVED":
-                {
-                    addNewLog(LOG_ERROR, "Debugging purpose only");
-                } break;
             case "AUDIOSTREAMINGSERVICE_LOCKED":
                 {
                     captureButtonState = captureButtonState_Recording;
                     captureButton.innerText = "Stop";
                     audioStreamToken = msg.data
 
-                    recorder.start()
+                    recorder.start(100);
                     addNewLog(LOG_ERROR, "Audio streaming started");
                     recorder.ondataavailable = ({ data }) => {
                         // TODO: maybe process the data first 
-                        wsconn.send(JSON.stringify({
-                            type: "AUDIOSTREAMINGSERVICE_SEND",
-                            data: data,
-                            token: audioStreamToken,
-                        }));
+                        // wsconn.send(JSON.stringify({
+                        //     type: "AUDIOSTREAMINGSERVICE_SEND",
+                        //     data: data,
+                        //     token: audioStreamToken,
+                        // }));
+                        //
+                        wsconn.send(new Blob([data], {type: "audio/ogg; codes=opus"}))
                     }
                 } break;
             case "AUDIOSTREAMINGSERVICE_UNLOCKED":
@@ -82,10 +80,14 @@ let wsconn = null;
                     captureButton.innerText = "Record";
                     audioStreamToken = null;
                     addNewLog(LOG_ERROR, "Audio streaming stoped");
+                    captureButtonState = captureButtonState_Idle;
                 } break;
             case "ERROR":
                 {
                     addNewLog(LOG_ERROR, msg.data);
+                } break;
+            case "AUDIOSTREAM_RECEIVED":
+                {
                 } break;
             default:
                 {
