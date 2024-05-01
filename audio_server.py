@@ -11,12 +11,12 @@ HTTP_PORT=8000
 WS_PORT=8001
 
 TEMP_FILE = "tmp.webm"
-ENABLE_SSL = True 
+ENABLE_SSL = True
 
 app = Flask(__name__, 
             template_folder="views", 
             static_folder="public",
-            static_url_path="/public"
+            static_url_path="/"
             )
 
 
@@ -29,6 +29,7 @@ def index():
     return redirect("/capture")
 
 def handle_audio_stream_data(data):
+    print(f"Data: {data}")
     # print("Data with type", type(data), ":", data)
     with open(TEMP_FILE, "ab") as f:
         f.write(data)
@@ -113,9 +114,6 @@ def run_flask_http_app():
         app.run(host=HOSTNAME, port=HTTP_PORT)
 
 if __name__ == "__main__":
-    with open(TEMP_FILE, "wb") as f:
-        pass
-
     print("Starting audio server do CTRL-c twice to close the server")
     websocket_app_thread = threading.Thread(target=run_websocket_app)
     flask_app_thread = threading.Thread(target=run_flask_http_app)
