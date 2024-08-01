@@ -26,11 +26,12 @@ const addNewLog = (type, message) =>  {
         return;
     }
 
+    const WShostname = location.hostname;
+    const WSProtocol = location.protocol === "https:" ? "wss" : "ws";
+    let wsURL = `${WSProtocol}://${WShostname}:8001`
     let wsconn = null;
     try {
-        const WShostname = location.hostname;
-        const WSProtocol = location.protocol === "https:" ? "wss" : "ws";
-        wsconn = new WebSocket(`${WSProtocol}://${WShostname}:8001`);
+        wsconn = new WebSocket(wsURL);
     } catch(err) {
         addNewLog(LOG_FATAL, `Failed to connect into websocket: ${err}`);
         return;
@@ -48,14 +49,31 @@ const addNewLog = (type, message) =>  {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const audioContext = new AudioContext();
     await audioContext.audioWorklet.addModule("processor.js")
-    processorNode = new AudioWorkletNode(audioContext, "processor");
-    processorNode.socket = wsconn;
-    processorNode.isRecording = false;
+    processorNode = new AudioWorkletNode(audioContext, "simple-processor", {
+        processorOptions: {
+            isRecording: false,
+        },
+    });
+
     processorNode.onprocessorerror = ev => {
         console.error(ev);
     }
+
+    processorNode.port.onmessage = ev => {
+        // Send the data from processor worklet
+        const data = ev.data;
+        wsconn.send(new Blob(data));
+    }
+
+    const setProcessorRecordingState = (isRecording) => {
+        if(processorNode && processorNode.port) {
+            processorNode.port.postMessage({ isRecording });
+        }
+    }
+
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(processorNode);
+    processorNode.connect(audioContext.destination);
 
     wsconn.onmessage = ev => {
         const data = ev.data;
@@ -70,8 +88,8 @@ const addNewLog = (type, message) =>  {
                     captureButtonState = captureButtonState_Recording;
                     captureButton.innerText = "Stop";
                     audioStreamToken = msg.data
+                    setProcessorRecordingState(true);
 
-                    processorNode.isRecording = true;
                     // recorder.start(100);
                     // recorder.ondataavailable = ({ data }) => {
                     //     wsconn.send(new Blob([data], {type: "audio/ogg; codes=opus"}))
@@ -80,8 +98,8 @@ const addNewLog = (type, message) =>  {
                 } break;
             case "AUDIOSTREAMINGSERVICE_UNLOCKED":
                 {
-                    processorNode.isRecording = false;
                     // recorder.stop();
+                    setProcessorRecordingState(false);
                     captureButton.innerText = "Record";
                     audioStreamToken = null;
                     captureButtonState = captureButtonState_Idle;
@@ -114,6 +132,7 @@ const addNewLog = (type, message) =>  {
                 if(audioStreamToken == null) {
                     addNewLog(LOG_FATAL, "Unreachable state where currently is recording but no audioStreamToken");
                 }
+                console.log("Trying to unlock the audio streaming")
                 wsconn.send(JSON.stringify({ type: "AUDIOSTREAMINGSERVICE_UNLOCK", token: audioStreamToken }))
             }
         }

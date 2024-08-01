@@ -1,9 +1,14 @@
 DEPENDENCIES = flask websockets asyncio
 
-all: https run
+all: https run-secure
+
+run-secure:
+	@go run . secure
+	# @python3 ./audio_server.py enable-ssl
 
 run:
-	@python3 ./audio_server.py
+	@go run . 
+	# @python3 ./audio_server.py
 
 https: ./key.pem ./cert.pem 
 ./cert.pem:

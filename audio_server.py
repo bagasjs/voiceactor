@@ -1,24 +1,37 @@
+from io import BytesIO
 import os
 import threading
+from typing import Any, List
 from flask import Flask, json, redirect, render_template
 import asyncio
+import pyaudio
 import websockets
 import ssl
 from datetime import datetime 
+import numpy as np
+
+from sys import argv
+import wave
+from pydub.playback import _play_with_ffplay as pydub_playback
+from pydub import AudioSegment
 
 HOSTNAME="0.0.0.0"
 HTTP_PORT=8000
 WS_PORT=8001
+AUDIO_CHANNELS=2
+AUDIO_FRAME_RATE=44100
+AUDIO_SAMPLE_WIDTH=4 # Float32
 
 TEMP_FILE = "tmp.webm"
-ENABLE_SSL = True
+ENABLE_SSL = False
+if len(argv) > 1 and argv[1] == "enable-ssl":
+    ENABLE_SSL = True
 
 app = Flask(__name__, 
             template_folder="views", 
             static_folder="public",
             static_url_path="/"
             )
-
 
 @app.route("/capture")
 def capture():
@@ -29,10 +42,12 @@ def index():
     return redirect("/capture")
 
 def handle_audio_stream_data(data):
-    print(f"Data: {data}")
-    # print("Data with type", type(data), ":", data)
-    with open(TEMP_FILE, "ab") as f:
-        f.write(data)
+    # print(data)
+    # samples = np.array(data, dtype=np.float32)
+    # stream.write(samples.tobytes())
+    if data:
+        with open(TEMP_FILE, "ab") as file:
+            file.write(data)
 
 async def handle_websocket(ws, path):
     client_token = None
@@ -77,13 +92,13 @@ async def handle_websocket(ws, path):
                     await ws.send(json.dumps(response))
 
             case "AUDIOSTREAMINGSERVICE_LOCK":
-                if client_token != None:
-                    response = { "type" : "ERROR", "data" : "Another client has already locked the server." }
-                    await ws.send(json.dumps(response))
-                else:
+                if client_token == None:
                     timestamp = datetime.now().timestamp()
                     client_token = f"client-token-{timestamp}"
                     response = { "type" : "AUDIOSTREAMINGSERVICE_LOCKED", "data": client_token }
+                    await ws.send(json.dumps(response))
+                else:
+                    response = { "type" : "ERROR", "data" : "Another client has already locked the server." }
                     await ws.send(json.dumps(response))
             case _:
                 print(message)
